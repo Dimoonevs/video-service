@@ -2,6 +2,7 @@ package mysql
 
 import (
 	"database/sql"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/go-sql-driver/mysql"
@@ -103,12 +104,17 @@ func (s *Storage) SetStatusIntoConv() error {
 	return nil
 }
 
-func (s *Storage) GetInfoVideos() ([]*models.InfoVideosResp, error) {
+func (s *Storage) GetInfoVideos(status string) ([]*models.InfoVideosResp, error) {
 	query := `
 	SELECT id, filename, status, is_stream
 	FROM files
 `
-	rows, err := s.db.Query(query)
+	var args []interface{}
+	if status != "" {
+		query += "WHERE status = ?"
+		args = append(args, status)
+	}
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -153,4 +159,52 @@ func (s *Storage) DeleteVideo(newFilename string, id int) error {
 		return err
 	}
 	return nil
+}
+
+func (s *Storage) GetVideoLinks() ([]*models.VideoFormatLinksResp, error) {
+	query := `
+	SELECT 
+		f.id AS file_id, 
+		f.filename, 
+		vf.id AS video_format_id, 
+		vf.formats
+	FROM 
+		files f
+	INNER JOIN 
+		files_j_video_formats fjvf ON f.id = fjvf.file_id
+	INNER JOIN 
+		video_formats vf ON fjvf.video_format_id = vf.id
+	WHERE 
+		f.status = 'done'
+`
+
+	rows, err := s.db.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []*models.VideoFormatLinksResp
+	var formatsJSON string
+	for rows.Next() {
+		var resp models.VideoFormatLinksResp
+		if err := rows.Scan(&resp.FileId, &resp.Filename, &resp.VideoFormatId, &formatsJSON); err != nil {
+			return nil, err
+		}
+		var videoFormats []models.VideoFormat
+		if err := json.Unmarshal([]byte(formatsJSON), &videoFormats); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal formats JSON: %w", err)
+		}
+
+		resp.Formats = videoFormats
+
+		results = append(results, &resp)
+
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return results, nil
 }

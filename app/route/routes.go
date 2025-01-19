@@ -33,6 +33,8 @@ func RequestHandler(ctx *fasthttp.RequestCtx) {
 			handleVideoErrorsUpdate(ctx)
 		case "/errors":
 			handleStatusError(ctx)
+		case "/links":
+			handlerVegeoGetLinks(ctx)
 		case "":
 			handleVideoGetInfo(ctx)
 		default:
@@ -118,7 +120,8 @@ func handleVideoErrorsUpdate(ctx *fasthttp.RequestCtx) {
 }
 
 func handleVideoGetInfo(ctx *fasthttp.RequestCtx) {
-	resp, err := mysql.GetConnection().GetInfoVideos()
+	videoStatus := string(ctx.FormValue("status"))
+	resp, err := mysql.GetConnection().GetInfoVideos(videoStatus)
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
 		ctx.SetBody([]byte(err.Error()))
@@ -149,4 +152,21 @@ func handleDeleteVideoById(ctx *fasthttp.RequestCtx) {
 	}
 	ctx.SetStatusCode(fasthttp.StatusOK)
 	ctx.SetBody([]byte("Video deleted successfully"))
+}
+func handlerVegeoGetLinks(ctx *fasthttp.RequestCtx) {
+	videoFormatLinksResp, err := mysql.GetConnection().GetVideoLinks()
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBody([]byte(err.Error()))
+		return
+	}
+	jsonResp, err := json.Marshal(videoFormatLinksResp)
+	if err != nil {
+		ctx.SetStatusCode(fasthttp.StatusInternalServerError)
+		ctx.SetBody([]byte("Failed to marshal response"))
+		return
+	}
+	ctx.SetContentType("application/json")
+	ctx.SetStatusCode(fasthttp.StatusOK)
+	ctx.SetBody(jsonResp)
 }

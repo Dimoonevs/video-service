@@ -12,3 +12,14 @@ type InfoVideosResp struct {
 	IsStream bool   `json:"is_stream"`
 	FilePath string `json:"file_path,omitempty"`
 }
+
+type VideoFormatLinksResp struct {
+	VideoFormatId int           `json:"video_format_id"`
+	FileId        int           `json:"file_id"`
+	Filename      string        `json:"filename"`
+	Formats       []VideoFormat `json:"formats"`
+}
+type VideoFormat struct {
+	URL        string `json:"url"`
+	Resolution string `json:"size"`
+}

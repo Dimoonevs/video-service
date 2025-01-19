@@ -16,4 +16,4 @@ restart-video-service:
 	echo "sudo su && cd $(HOMEDIR) && bash restart.sh && exit" | ssh $(USER)@$(HOST) /bin/sh
 
 run-local:
-	go run main.go -config ./app/utils/cfg/local.ini
+	go run main.go -config ./utils/cfg/local.ini
