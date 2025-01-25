@@ -2,6 +2,7 @@ package routes
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/valyala/fasthttp"
 	"log"
 	"strconv"
@@ -39,13 +40,13 @@ func RequestHandler(ctx *fasthttp.RequestCtx) {
 			handleVideoGetInfo(ctx)
 		default:
 			ctx.SetStatusCode(fasthttp.StatusNotFound)
-			ctx.SetBody([]byte("Endpoint not found2"))
+			ctx.SetBody([]byte("Endpoint not found"))
 		}
 		return
 	}
 
 	ctx.SetStatusCode(fasthttp.StatusNotFound)
-	ctx.SetBody([]byte("Endpoint not found1"))
+	ctx.SetBody([]byte("Endpoint not found"))
 }
 
 func handleUpload(ctx *fasthttp.RequestCtx) {
@@ -65,7 +66,7 @@ func handleUpload(ctx *fasthttp.RequestCtx) {
 	form, err := ctx.MultipartForm()
 	if err != nil {
 		ctx.SetStatusCode(fasthttp.StatusBadRequest)
-		ctx.SetBody([]byte("Invalid multipart form"))
+		ctx.SetBody([]byte(fmt.Sprintf("Invalid multipart form %s", err)))
 		return
 	}
 
