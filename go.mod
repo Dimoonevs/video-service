@@ -1,4 +1,4 @@
-module github.com/Dimoonevs/upload-video
+module github.com/Dimoonevs/video-service
 
 go 1.22.5
 

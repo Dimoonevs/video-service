@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/Dimoonevs/upload-video/app/internal/models"
+	"github.com/Dimoonevs/video-service/app/internal/models"
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"

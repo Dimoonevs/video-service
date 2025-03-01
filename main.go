@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/Dimoonevs/upload-video/app/pkg/route"
+	"github.com/Dimoonevs/video-service/app/pkg/route"
 	"github.com/valyala/fasthttp"
 	"github.com/vharitonsky/iniflags"
 )

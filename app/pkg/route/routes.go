@@ -1,9 +1,9 @@
 package route
 
 import (
-	"github.com/Dimoonevs/upload-video/app/internal/repo/mysql"
-	"github.com/Dimoonevs/upload-video/app/internal/service"
-	"github.com/Dimoonevs/upload-video/app/pkg/respJSON"
+	"github.com/Dimoonevs/video-service/app/internal/repo/mysql"
+	"github.com/Dimoonevs/video-service/app/internal/service"
+	"github.com/Dimoonevs/video-service/app/pkg/respJSON"
 	"github.com/valyala/fasthttp"
 	"log"
 	"strconv"
