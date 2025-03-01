@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
+	"github.com/Dimoonevs/upload-video/app/pkg/route"
 	"github.com/valyala/fasthttp"
 	"github.com/vharitonsky/iniflags"
-	routes "upload-video/app/route"
 )
 
 var (
@@ -16,7 +16,7 @@ func main() {
 	iniflags.Parse()
 
 	server := &fasthttp.Server{
-		Handler:            routes.RequestHandler,
+		Handler:            route.RequestHandler,
 		MaxRequestBodySize: 20 * 104 * 1024 * 1024,
 	}
 

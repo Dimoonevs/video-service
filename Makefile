@@ -1,4 +1,4 @@
-HOST=13.48.46.221
+HOST=13.61.187.160
 HOMEDIR=/var/www/video-service/
 USER=dima
 
@@ -14,6 +14,8 @@ upload-video-service: video-service-linux
 
 restart-video-service:
 	echo "sudo su && cd $(HOMEDIR) && bash restart.sh && exit" | ssh $(USER)@$(HOST) /bin/sh
+
+upload-and-restart: upload-video-service restart-video-service
 
 run-local:
 	go run main.go -config ./utils/cfg/local.ini

@@ -21,6 +21,9 @@ github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zlib
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
+# github.com/sirupsen/logrus v1.9.3
+## explicit; go 1.13
+github.com/sirupsen/logrus
 # github.com/valyala/bytebufferpool v1.0.0
 ## explicit
 github.com/valyala/bytebufferpool
@@ -32,3 +35,7 @@ github.com/valyala/fasthttp/stackless
 # github.com/vharitonsky/iniflags v0.0.0-20180513140207-a33cd0b5f3de
 ## explicit
 github.com/vharitonsky/iniflags
+# golang.org/x/sys v0.26.0
+## explicit; go 1.18
+golang.org/x/sys/unix
+golang.org/x/sys/windows
