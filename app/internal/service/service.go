@@ -106,12 +106,11 @@ func deleteParentDir(filePath string) error {
 func saveFileDiskAndDB(files []*multipart.FileHeader, skippedFiles *[]string, isStreams bool) error {
 	var wg sync.WaitGroup
 	db := mysql.GetConnection()
-	errChan := make(chan error, len(files)*2) // Два горутины на каждый файл
+	errChan := make(chan error, len(files)*2)
 
 	for _, file := range files {
 		savePath := *pathToSave + hashFilename(file.Filename) + "/" + file.Filename
 
-		// Пропускаем не-MP4 файлы
 		if !lib.IsMP4(file.Filename) {
 			*skippedFiles = append(*skippedFiles, file.Filename)
 			continue
