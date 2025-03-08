@@ -13,6 +13,7 @@ import (
 	"io"
 	"mime/multipart"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -65,9 +66,11 @@ func DeleteVideo(id int) error {
 }
 
 func saveFileImmediately(fileHeader *multipart.FileHeader, savePath string) error {
+	tempPath := savePath + "_temp"
+
 	src, err := fileHeader.Open()
 	if err != nil {
-		logrus.Errorf("open error: %d", err)
+		logrus.Errorf("open error: %v", err)
 		return err
 	}
 	defer src.Close()
@@ -75,13 +78,13 @@ func saveFileImmediately(fileHeader *multipart.FileHeader, savePath string) erro
 	dir := filepath.Dir(savePath)
 	err = os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
-		logrus.Errorf("mkdir error: %d", err)
+		logrus.Errorf("mkdir error: %v", err)
 		return err
 	}
 
-	dst, err := os.Create(savePath)
+	dst, err := os.Create(tempPath)
 	if err != nil {
-		logrus.Errorf("create error: %v", err)
+		logrus.Errorf("create temp file error: %v", err)
 		return err
 	}
 	defer dst.Close()
@@ -91,8 +94,28 @@ func saveFileImmediately(fileHeader *multipart.FileHeader, savePath string) erro
 		logrus.Errorf("copy error: %v", err)
 		return err
 	}
+
+	err = trimVideo(tempPath, savePath)
+	if err != nil {
+		logrus.Errorf("ffmpeg trim error: %v", err)
+		return err
+	}
+
+	err = os.Remove(tempPath)
+	if err != nil {
+		logrus.Warnf("error remove trim file: %v", err)
+	}
+
 	return nil
 }
+func trimVideo(inputPath, outputPath string) error {
+	cmd := exec.Command("ffmpeg", "-i", inputPath, "-t", "300", "-c", "copy", outputPath)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+
+	return cmd.Run()
+}
+
 func deleteParentDir(filePath string) error {
 	parentDir := filepath.Dir(filePath)
 
@@ -151,4 +174,17 @@ func hashFilename(filename string) string {
 	hasher := md5.New()
 	hasher.Write([]byte(filename))
 	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+func SaveTemporaryFile(file *multipart.FileHeader) (string, error) {
+	tempDir := "/tmp/video_uploads/"
+	savePath := filepath.Join(tempDir, file.Filename)
+
+	err := saveFileImmediately(file, savePath)
+	if err != nil {
+		return "", fmt.Errorf("error save temp file %s: %w", file.Filename, err)
+	}
+
+	logrus.Infof("Temp file saved: %s", savePath)
+	return savePath, nil
 }

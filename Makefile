@@ -1,4 +1,4 @@
-HOST=13.61.187.160
+HOST=ec2-13-49-78-32.eu-north-1.compute.amazonaws.com
 HOMEDIR=/var/www/video-service/
 USER=dima
 
