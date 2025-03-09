@@ -2,21 +2,28 @@
 ## explicit; go 1.20
 filippo.io/edwards25519
 filippo.io/edwards25519/field
+# github.com/Dimoonevs/user-service v0.0.0-20250309131852-bf5dc087b3d3
+## explicit; go 1.23.5
+github.com/Dimoonevs/user-service/app/pkg/jwt
 # github.com/andybalholm/brotli v1.1.1
 ## explicit; go 1.13
 github.com/andybalholm/brotli
 github.com/andybalholm/brotli/matchfinder
-# github.com/go-sql-driver/mysql v1.8.1
-## explicit; go 1.18
-github.com/go-sql-driver/mysql
-# github.com/klauspost/compress v1.17.11
+# github.com/go-sql-driver/mysql v1.9.0
 ## explicit; go 1.21
+github.com/go-sql-driver/mysql
+# github.com/golang-jwt/jwt/v4 v4.5.1
+## explicit; go 1.16
+github.com/golang-jwt/jwt/v4
+# github.com/klauspost/compress v1.18.0
+## explicit; go 1.22
 github.com/klauspost/compress
 github.com/klauspost/compress/flate
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/gzip
 github.com/klauspost/compress/huff0
 github.com/klauspost/compress/internal/cpuinfo
+github.com/klauspost/compress/internal/le
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zlib
 github.com/klauspost/compress/zstd
@@ -27,7 +34,7 @@ github.com/sirupsen/logrus
 # github.com/valyala/bytebufferpool v1.0.0
 ## explicit
 github.com/valyala/bytebufferpool
-# github.com/valyala/fasthttp v1.57.0
+# github.com/valyala/fasthttp v1.59.0
 ## explicit; go 1.21
 github.com/valyala/fasthttp
 github.com/valyala/fasthttp/fasthttputil
@@ -35,7 +42,7 @@ github.com/valyala/fasthttp/stackless
 # github.com/vharitonsky/iniflags v0.0.0-20180513140207-a33cd0b5f3de
 ## explicit
 github.com/vharitonsky/iniflags
-# golang.org/x/sys v0.26.0
-## explicit; go 1.18
+# golang.org/x/sys v0.31.0
+## explicit; go 1.23.0
 golang.org/x/sys/unix
 golang.org/x/sys/windows

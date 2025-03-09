@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"github.com/Dimoonevs/video-service/app/internal/models"
+	"github.com/Dimoonevs/video-service/app/pkg/lib"
 	"github.com/go-sql-driver/mysql"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"
@@ -44,12 +45,12 @@ func GetConnection() *Storage {
 	return storage
 }
 
-func (s *Storage) SetFilesData(file *multipart.FileHeader, path string, isStream bool) error {
+func (s *Storage) SetFilesData(file *multipart.FileHeader, path string, isStream bool, id int) error {
 	query := `
-		INSERT INTO files (filename, filepath, is_stream, status)
-		VALUES (?, ?, ?, IF(? = 1, 'conv', 'no_conv'))
+		INSERT INTO files (filename, filepath, is_stream, status, user_id)
+		VALUES (?, ?, ?, IF(? = 1, 'conv', 'no_conv'), ?)
 	`
-	_, err := s.db.Exec(query, file.Filename, path, isStream, isStream)
+	_, err := s.db.Exec(query, file.Filename, path, isStream, isStream, id)
 	if err != nil {
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1062 {
 			logrus.Errorf("duplicate entry error: %v", err)
@@ -62,44 +63,14 @@ func (s *Storage) SetFilesData(file *multipart.FileHeader, path string, isStream
 	return nil
 }
 
-func (s *Storage) GetStatusError() ([]*models.StatusErrorResp, error) {
-	query := `
-		SELECT id, filename 
-		FROM files 
-		WHERE status = 'error' AND is_stream = 1;
-	`
-
-	rows, err := s.db.Query(query)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var results []*models.StatusErrorResp
-
-	for rows.Next() {
-		var resp models.StatusErrorResp
-		if err := rows.Scan(&resp.Id, &resp.FileName); err != nil {
-			return nil, err
-		}
-		results = append(results, &resp)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return results, nil
-}
-
-func (s *Storage) SetStatusIntoConv() error {
+func (s *Storage) SetStatusIntoConv(id int) error {
 	query := `
 		UPDATE files 
 		SET status = 'conv' 
-		WHERE status = 'error' AND is_stream = 1;
+		WHERE status = 'error' AND is_stream = 1 and user_id = ?;
 	`
 
-	_, err := s.db.Exec(query)
+	_, err := s.db.Exec(query, id)
 	if err != nil {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
@@ -107,11 +78,12 @@ func (s *Storage) SetStatusIntoConv() error {
 	return nil
 }
 
-func (s *Storage) GetInfoVideos(status string) ([]*models.InfoVideosResp, error) {
-	query := `
-	SELECT id, filename, status, is_stream
+func (s *Storage) GetInfoVideos(status string, userID int) ([]*models.InfoVideosResp, error) {
+	query := fmt.Sprintf(`
+	SELECT id, filename, status, is_stream, filepath
 	FROM files
-`
+	WHERE user_id = %d
+`, userID)
 	var args []interface{}
 	if status != "" {
 		query += "WHERE status = ?"
@@ -125,8 +97,12 @@ func (s *Storage) GetInfoVideos(status string) ([]*models.InfoVideosResp, error)
 	var results []*models.InfoVideosResp
 	for rows.Next() {
 		var resp models.InfoVideosResp
-		if err := rows.Scan(&resp.Id, &resp.FileName, &resp.Status, &resp.IsStream); err != nil {
+		var filepathLocal string
+		if err = rows.Scan(&resp.Id, &resp.FileName, &resp.Status, &resp.IsStream, &filepathLocal); err != nil {
 			return nil, err
+		}
+		if resp.Status != "deleted" {
+			resp.FilePath = lib.GetVideoPublicLink(filepathLocal)
 		}
 		results = append(results, &resp)
 	}
@@ -136,13 +112,14 @@ func (s *Storage) GetInfoVideos(status string) ([]*models.InfoVideosResp, error)
 	return results, nil
 }
 
-func (s *Storage) GetInfoVideoById(id int) (*models.InfoVideosResp, error) {
+func (s *Storage) GetInfoVideoById(id int, userID int) (*models.InfoVideosResp, error) {
 	query := `
 	SELECT id, filename, status, is_stream, filepath
 	FROM files
 	WHERE id = ?
+	AND user_id = ?
 `
-	row := s.db.QueryRow(query, id)
+	row := s.db.QueryRow(query, id, userID)
 
 	var videoInfo models.InfoVideosResp
 	if err := row.Scan(&videoInfo.Id, &videoInfo.FileName, &videoInfo.Status, &videoInfo.IsStream, &videoInfo.FilePath); err != nil {
@@ -151,20 +128,21 @@ func (s *Storage) GetInfoVideoById(id int) (*models.InfoVideosResp, error) {
 	return &videoInfo, nil
 }
 
-func (s *Storage) DeleteVideo(newFilename string, id int) error {
+func (s *Storage) DeleteVideo(newFilename string, id, userID int) error {
 	query := `
 	UPDATE files
 	SET status = 'deleted', filename = CONCAT(filename, ?)
 	WHERE id = ?
+	AND user_id = ?
 `
-	_, err := s.db.Exec(query, newFilename, id)
+	_, err := s.db.Exec(query, newFilename, id, userID)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Storage) GetVideoLinks() ([]*models.VideoFormatLinksResp, error) {
+func (s *Storage) GetVideoLinks(id int) ([]*models.VideoFormatLinksResp, error) {
 	query := `
 	SELECT 
 		f.id AS file_id, 
@@ -179,9 +157,10 @@ func (s *Storage) GetVideoLinks() ([]*models.VideoFormatLinksResp, error) {
 		video_formats vf ON fjvf.video_format_id = vf.id
 	WHERE 
 		f.status = 'done'
+	AND f.user_id = ?
 `
 
-	rows, err := s.db.Query(query)
+	rows, err := s.db.Query(query, id)
 	if err != nil {
 		return nil, err
 	}

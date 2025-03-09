@@ -1,6 +1,8 @@
 package route
 
 import (
+	"fmt"
+	"github.com/Dimoonevs/user-service/app/pkg/jwt"
 	"github.com/Dimoonevs/video-service/app/internal/repo/mysql"
 	"github.com/Dimoonevs/video-service/app/internal/service"
 	"github.com/Dimoonevs/video-service/app/pkg/respJSON"
@@ -18,42 +20,43 @@ func RequestHandler(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
+	jwt.JWTMiddleware(func(ctx *fasthttp.RequestCtx) {
+		handleRoutes(ctx, path)
+	})(ctx)
+}
+
+func handleRoutes(ctx *fasthttp.RequestCtx, path string) {
 	remainingPath := path[len("/video-service"):]
 
-	if strings.HasPrefix(remainingPath, "/check") {
+	switch {
+	case strings.HasPrefix(remainingPath, "/check"):
 		handleCheck(ctx)
-		return
-	}
-	if strings.HasPrefix(remainingPath, "/upload") {
+	case strings.HasPrefix(remainingPath, "/upload"):
 		if string(ctx.Method()) == "POST" {
 			handleUpload(ctx)
 		} else {
 			respJSON.WriteJSONError(ctx, fasthttp.StatusMethodNotAllowed, nil, "Method not allowed")
 		}
-		return
+	case strings.HasPrefix(remainingPath, "/video"):
+		handleVideoRoutes(ctx, remainingPath[len("/video"):])
+	default:
+		respJSON.WriteJSONError(ctx, fasthttp.StatusNotFound, nil, "Endpoint not found")
 	}
+}
 
-	if strings.HasPrefix(remainingPath, "/video") {
-		remainingPath := remainingPath[len("/video"):]
-
-		switch remainingPath {
-		case "/delete":
-			handleDeleteVideoById(ctx)
-		case "/errors/update":
-			handleVideoErrorsUpdate(ctx)
-		case "/errors":
-			handleStatusError(ctx)
-		case "/links":
-			handlerVegeoGetLinks(ctx)
-		case "":
-			handleVideoGetInfo(ctx)
-		default:
-			respJSON.WriteJSONError(ctx, fasthttp.StatusNotFound, nil, "Endpoint not found")
-		}
-		return
+func handleVideoRoutes(ctx *fasthttp.RequestCtx, remainingPath string) {
+	switch remainingPath {
+	case "/delete":
+		handleDeleteVideoById(ctx)
+	case "/errors/update":
+		handleVideoErrorsUpdate(ctx)
+	case "/links":
+		handlerVideoGetLinks(ctx)
+	case "":
+		handleVideoGetInfo(ctx)
+	default:
+		respJSON.WriteJSONError(ctx, fasthttp.StatusNotFound, nil, "Endpoint not found")
 	}
-
-	respJSON.WriteJSONError(ctx, fasthttp.StatusNotFound, nil, "Endpoint not found")
 }
 
 func handleUpload(ctx *fasthttp.RequestCtx) {
@@ -65,6 +68,12 @@ func handleUpload(ctx *fasthttp.RequestCtx) {
 		isStream = false
 	} else {
 		respJSON.WriteJSONError(ctx, fasthttp.StatusBadRequest, nil, "Invalid value for is_stream. Expecting true/false or 1/0")
+		return
+	}
+
+	userID, err := getUserIDFromContext(ctx)
+	if err != nil {
+		respJSON.WriteJSONError(ctx, fasthttp.StatusUnauthorized, err, "Error getting user id: ")
 		return
 	}
 
@@ -80,7 +89,7 @@ func handleUpload(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if err = service.SaveFile(files, isStream); err != nil {
+	if err = service.SaveFile(files, isStream, userID); err != nil {
 		respJSON.WriteJSONError(ctx, fasthttp.StatusInternalServerError, err, "Error saving file")
 		return
 	}
@@ -88,18 +97,13 @@ func handleUpload(ctx *fasthttp.RequestCtx) {
 	respJSON.WriteJSONResponse(ctx, fasthttp.StatusCreated, "File uploaded successfully", nil)
 }
 
-func handleStatusError(ctx *fasthttp.RequestCtx) {
-	resp, err := service.GetStatusError()
+func handleVideoErrorsUpdate(ctx *fasthttp.RequestCtx) {
+	userID, err := getUserIDFromContext(ctx)
 	if err != nil {
-		respJSON.WriteJSONError(ctx, fasthttp.StatusInternalServerError, err, "Failed to get status error")
+		respJSON.WriteJSONError(ctx, fasthttp.StatusUnauthorized, err, "Error getting user id: ")
 		return
 	}
-
-	respJSON.WriteJSONResponse(ctx, fasthttp.StatusOK, "Status error retrieved successfully", resp)
-}
-
-func handleVideoErrorsUpdate(ctx *fasthttp.RequestCtx) {
-	if err := service.ChangeStatus(); err != nil {
+	if err := mysql.GetConnection().SetStatusIntoConv(userID); err != nil {
 		respJSON.WriteJSONError(ctx, fasthttp.StatusInternalServerError, err, "Failed to update status error")
 		return
 	}
@@ -109,7 +113,12 @@ func handleVideoErrorsUpdate(ctx *fasthttp.RequestCtx) {
 
 func handleVideoGetInfo(ctx *fasthttp.RequestCtx) {
 	videoStatus := string(ctx.FormValue("status"))
-	resp, err := mysql.GetConnection().GetInfoVideos(videoStatus)
+	userID, err := getUserIDFromContext(ctx)
+	if err != nil {
+		respJSON.WriteJSONError(ctx, fasthttp.StatusUnauthorized, err, "Error getting user id: ")
+		return
+	}
+	resp, err := mysql.GetConnection().GetInfoVideos(videoStatus, userID)
 	if err != nil {
 		respJSON.WriteJSONError(ctx, fasthttp.StatusInternalServerError, err, "Failed to get video info")
 		return
@@ -125,15 +134,25 @@ func handleDeleteVideoById(ctx *fasthttp.RequestCtx) {
 		log.Printf("Error converting id to int: %v\n", err)
 		return
 	}
-	if err = service.DeleteVideo(idVideo); err != nil {
+	userID, err := getUserIDFromContext(ctx)
+	if err != nil {
+		respJSON.WriteJSONError(ctx, fasthttp.StatusUnauthorized, err, "Error getting user id: ")
+		return
+	}
+	if err = service.DeleteVideo(idVideo, userID); err != nil {
 		respJSON.WriteJSONError(ctx, fasthttp.StatusInternalServerError, err, "Error deleting video")
 		return
 	}
 	respJSON.WriteJSONResponse(ctx, fasthttp.StatusOK, "Video deleted successfully", nil)
 }
 
-func handlerVegeoGetLinks(ctx *fasthttp.RequestCtx) {
-	videoFormatLinksResp, err := mysql.GetConnection().GetVideoLinks()
+func handlerVideoGetLinks(ctx *fasthttp.RequestCtx) {
+	userID, err := getUserIDFromContext(ctx)
+	if err != nil {
+		respJSON.WriteJSONError(ctx, fasthttp.StatusUnauthorized, err, "Error getting user id: ")
+		return
+	}
+	videoFormatLinksResp, err := mysql.GetConnection().GetVideoLinks(userID)
 	if err != nil {
 		respJSON.WriteJSONError(ctx, fasthttp.StatusInternalServerError, err, "Failed to get video links")
 		return
@@ -144,4 +163,14 @@ func handlerVegeoGetLinks(ctx *fasthttp.RequestCtx) {
 
 func handleCheck(ctx *fasthttp.RequestCtx) {
 	respJSON.WriteJSONResponse(ctx, fasthttp.StatusOK, "Service is running", nil)
+}
+
+func getUserIDFromContext(ctx *fasthttp.RequestCtx) (int, error) {
+	userIDValue := ctx.UserValue("userID")
+	userIDFloat, ok := userIDValue.(float64)
+	if !ok {
+		return 0, fmt.Errorf("invalid userID format: %f", userIDFloat)
+	}
+
+	return int(userIDFloat), nil
 }

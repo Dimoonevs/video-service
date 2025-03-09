@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/Dimoonevs/video-service/app/internal/models"
 	"github.com/Dimoonevs/video-service/app/internal/repo/mysql"
 	"github.com/Dimoonevs/video-service/app/pkg/lib"
 	"github.com/sirupsen/logrus"
@@ -23,9 +22,9 @@ var (
 	pathToSave = flag.String("pathToSave", "", "path to save the file")
 )
 
-func SaveFile(files []*multipart.FileHeader, isStreams bool) error {
+func SaveFile(files []*multipart.FileHeader, isStreams bool, id int) error {
 	var skippedFiles []string
-	if err := saveFileDiskAndDB(files, &skippedFiles, isStreams); err != nil {
+	if err := saveFileDiskAndDB(files, &skippedFiles, isStreams, id); err != nil {
 		return err
 	}
 	if len(skippedFiles) > 0 {
@@ -35,19 +34,8 @@ func SaveFile(files []*multipart.FileHeader, isStreams bool) error {
 	return nil
 }
 
-func GetStatusError() ([]*models.StatusErrorResp, error) {
-	statErr, err := mysql.GetConnection().GetStatusError()
-	if err != nil {
-		return nil, err
-	}
-	return statErr, nil
-}
-func ChangeStatus() error {
-	return mysql.GetConnection().SetStatusIntoConv()
-}
-
-func DeleteVideo(id int) error {
-	videoInfo, err := mysql.GetConnection().GetInfoVideoById(id)
+func DeleteVideo(id int, userID int) error {
+	videoInfo, err := mysql.GetConnection().GetInfoVideoById(id, userID)
 	if err != nil {
 		return err
 	}
@@ -58,7 +46,7 @@ func DeleteVideo(id int) error {
 		return err
 	}
 	videoInfo.FileName = fmt.Sprintf("_%s_%d", "deleted", id)
-	err = mysql.GetConnection().DeleteVideo(videoInfo.FileName, id)
+	err = mysql.GetConnection().DeleteVideo(videoInfo.FileName, id, userID)
 	if err != nil {
 		return err
 	}
@@ -126,13 +114,12 @@ func deleteParentDir(filePath string) error {
 	return nil
 }
 
-func saveFileDiskAndDB(files []*multipart.FileHeader, skippedFiles *[]string, isStreams bool) error {
+func saveFileDiskAndDB(files []*multipart.FileHeader, skippedFiles *[]string, isStreams bool, id int) error {
 	var wg sync.WaitGroup
-	db := mysql.GetConnection()
 	errChan := make(chan error, len(files)*2)
 
 	for _, file := range files {
-		savePath := *pathToSave + hashFilename(file.Filename) + "/" + file.Filename
+		savePath := *pathToSave + hashFilename(id, file.Filename) + "/" + file.Filename
 
 		if !lib.IsMP4(file.Filename) {
 			*skippedFiles = append(*skippedFiles, file.Filename)
@@ -150,7 +137,7 @@ func saveFileDiskAndDB(files []*multipart.FileHeader, skippedFiles *[]string, is
 		wg.Add(1)
 		go func(file *multipart.FileHeader, path string) {
 			defer wg.Done()
-			if err := db.SetFilesData(file, path, isStreams); err != nil {
+			if err := mysql.GetConnection().SetFilesData(file, path, isStreams, id); err != nil {
 				errChan <- fmt.Errorf("ошибка при записи в БД файла %s: %w", file.Filename, err)
 			}
 		}(file, savePath)
@@ -170,21 +157,8 @@ func saveFileDiskAndDB(files []*multipart.FileHeader, skippedFiles *[]string, is
 	return nil
 }
 
-func hashFilename(filename string) string {
+func hashFilename(userID int, filename string) string {
 	hasher := md5.New()
-	hasher.Write([]byte(filename))
+	hasher.Write([]byte(fmt.Sprintf("%d_%s", userID, filename))) // Добавляем userID к имени файла
 	return hex.EncodeToString(hasher.Sum(nil))
-}
-
-func SaveTemporaryFile(file *multipart.FileHeader) (string, error) {
-	tempDir := "/tmp/video_uploads/"
-	savePath := filepath.Join(tempDir, file.Filename)
-
-	err := saveFileImmediately(file, savePath)
-	if err != nil {
-		return "", fmt.Errorf("error save temp file %s: %w", file.Filename, err)
-	}
-
-	logrus.Infof("Temp file saved: %s", savePath)
-	return savePath, nil
 }
