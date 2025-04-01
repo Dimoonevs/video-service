@@ -8,7 +8,7 @@ import (
 
 var (
 	staticRootDir = flag.String("staticDir", "/var/www/file_service/", "static dir")
-	publicHost    = flag.String("publicHost", "http://your-video-service.pp.ua/video/service/", "public host")
+	publicHost    = flag.String("publicHost", "http://file.your-video-service.pp.ua/video/service/", "public host")
 )
 
 func IsMP4(filename string) bool {
@@ -20,5 +20,5 @@ func GetVideoLocalLink(link string) string {
 }
 
 func GetVideoPublicLink(link string) string {
-	return strings.ReplaceAll(link, *publicHost, *staticRootDir)
+	return strings.ReplaceAll(link, *staticRootDir, *publicHost)
 }
