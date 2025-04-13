@@ -78,16 +78,20 @@ func (s *Storage) SetStatusIntoConv(id int) error {
 	return nil
 }
 
-func (s *Storage) GetInfoVideos(status string, userID int) ([]*models.InfoVideosResp, error) {
+func (s *Storage) GetInfoVideos(status string, userID, videoID int) ([]*models.InfoVideosResp, error) {
 	query := fmt.Sprintf(`
-	SELECT id, filename, status, is_stream, filepath
+	SELECT id, filename, status, is_stream, filepath, status_ai
 	FROM files
 	WHERE user_id = %d
 `, userID)
 	var args []interface{}
 	if status != "" {
-		query += "WHERE status = ?"
+		query += "AND status = ?"
 		args = append(args, status)
+	}
+	if videoID != 0 {
+		query += "AND id = ?"
+		args = append(args, videoID)
 	}
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
@@ -98,7 +102,7 @@ func (s *Storage) GetInfoVideos(status string, userID int) ([]*models.InfoVideos
 	for rows.Next() {
 		var resp models.InfoVideosResp
 		var filepathLocal string
-		if err = rows.Scan(&resp.Id, &resp.FileName, &resp.Status, &resp.IsStream, &filepathLocal); err != nil {
+		if err = rows.Scan(&resp.Id, &resp.FileName, &resp.Status, &resp.IsStream, &filepathLocal, &resp.StatusAI); err != nil {
 			return nil, err
 		}
 		if resp.Status != "deleted" {
@@ -114,7 +118,7 @@ func (s *Storage) GetInfoVideos(status string, userID int) ([]*models.InfoVideos
 
 func (s *Storage) GetInfoVideoById(id int, userID int) (*models.InfoVideosResp, error) {
 	query := `
-	SELECT id, filename, status, is_stream, filepath
+	SELECT id, filename, status, is_stream, filepath, status_ai
 	FROM files
 	WHERE id = ?
 	AND user_id = ?
@@ -122,7 +126,7 @@ func (s *Storage) GetInfoVideoById(id int, userID int) (*models.InfoVideosResp, 
 	row := s.db.QueryRow(query, id, userID)
 
 	var videoInfo models.InfoVideosResp
-	if err := row.Scan(&videoInfo.Id, &videoInfo.FileName, &videoInfo.Status, &videoInfo.IsStream, &videoInfo.FilePath); err != nil {
+	if err := row.Scan(&videoInfo.Id, &videoInfo.FileName, &videoInfo.Status, &videoInfo.IsStream, &videoInfo.FilePath, &videoInfo.StatusAI); err != nil {
 		return nil, err
 	}
 	return &videoInfo, nil

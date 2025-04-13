@@ -1,4 +1,4 @@
-HOST=51.21.131.121
+HOST=46.202.143.194
 HOMEDIR=/var/www/video-service/
 USER=dima
 

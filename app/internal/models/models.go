@@ -11,6 +11,7 @@ type InfoVideosResp struct {
 	Status   string `json:"status"`
 	IsStream bool   `json:"is_stream"`
 	FilePath string `json:"file_path,omitempty"`
+	StatusAI string `json:"status_ai,omitempty"`
 }
 
 type VideoFormatLinksResp struct {

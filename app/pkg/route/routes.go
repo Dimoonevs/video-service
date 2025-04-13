@@ -13,6 +13,11 @@ import (
 )
 
 func RequestHandler(ctx *fasthttp.RequestCtx) {
+	if string(ctx.Method()) == fasthttp.MethodOptions {
+		ctx.SetStatusCode(fasthttp.StatusOK)
+		return
+	}
+
 	path := string(ctx.URI().Path())
 
 	if !strings.HasPrefix(path, "/video-service") {
@@ -113,12 +118,13 @@ func handleVideoErrorsUpdate(ctx *fasthttp.RequestCtx) {
 
 func handleVideoGetInfo(ctx *fasthttp.RequestCtx) {
 	videoStatus := string(ctx.FormValue("status"))
+	videoID := ctx.QueryArgs().GetUintOrZero("id")
 	userID, err := getUserIDFromContext(ctx)
 	if err != nil {
 		respJSON.WriteJSONError(ctx, fasthttp.StatusUnauthorized, err, "Error getting user id: ")
 		return
 	}
-	resp, err := mysql.GetConnection().GetInfoVideos(videoStatus, userID)
+	resp, err := mysql.GetConnection().GetInfoVideos(videoStatus, userID, videoID)
 	if err != nil {
 		respJSON.WriteJSONError(ctx, fasthttp.StatusInternalServerError, err, "Failed to get video info")
 		return
