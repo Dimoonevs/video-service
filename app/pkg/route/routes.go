@@ -94,12 +94,9 @@ func handleUpload(ctx *fasthttp.RequestCtx) {
 		return
 	}
 
-	if err = service.SaveFile(files, isStream, userID); err != nil {
-		respJSON.WriteJSONError(ctx, fasthttp.StatusInternalServerError, err, "Error saving file")
-		return
-	}
+	service.SaveFile(files, isStream, userID)
 
-	respJSON.WriteJSONResponse(ctx, fasthttp.StatusCreated, "File uploaded successfully", nil)
+	respJSON.WriteJSONResponse(ctx, fasthttp.StatusCreated, "File uploaded in process", nil)
 }
 
 func handleVideoErrorsUpdate(ctx *fasthttp.RequestCtx) {

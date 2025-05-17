@@ -24,3 +24,16 @@ type VideoFormat struct {
 	URL        string `json:"url"`
 	Resolution string `json:"size"`
 }
+
+type FileStatus string
+
+const (
+	StatusNoConv    FileStatus = "no_conv"
+	StatusConv      FileStatus = "conv"
+	StatusProcess   FileStatus = "process"
+	StatusDone      FileStatus = "done"
+	StatusError     FileStatus = "error"
+	StatusDeleted   FileStatus = "deleted"
+	StatusLoading   FileStatus = "loading"
+	StatusLoadError FileStatus = "loading_error"
+)

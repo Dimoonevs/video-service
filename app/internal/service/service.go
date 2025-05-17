@@ -6,13 +6,13 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/Dimoonevs/video-service/app/internal/models"
 	"github.com/Dimoonevs/video-service/app/internal/repo/mysql"
 	"github.com/Dimoonevs/video-service/app/pkg/lib"
 	"github.com/sirupsen/logrus"
 	"io"
 	"mime/multipart"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -22,16 +22,14 @@ var (
 	pathToSave = flag.String("pathToSave", "", "path to save the file")
 )
 
-func SaveFile(files []*multipart.FileHeader, isStreams bool, id int) error {
+func SaveFile(files []*multipart.FileHeader, isStreams bool, id int) {
 	var skippedFiles []string
 	if err := saveFileDiskAndDB(files, &skippedFiles, isStreams, id); err != nil {
-		return err
+		logrus.Errorf("unable to save file: %v", err)
 	}
 	if len(skippedFiles) > 0 {
-		return fmt.Errorf("skipped files: %v", skippedFiles)
+		logrus.Errorf("skipped files: %v", skippedFiles)
 	}
-
-	return nil
 }
 
 func DeleteVideo(id int, userID int) error {
@@ -53,55 +51,28 @@ func DeleteVideo(id int, userID int) error {
 	return nil
 }
 
-func saveFileImmediately(fileHeader *multipart.FileHeader, savePath string) error {
-	tempPath := savePath + "_temp"
-
-	src, err := fileHeader.Open()
-	if err != nil {
-		logrus.Errorf("open error: %v", err)
-		return err
-	}
-	defer src.Close()
-
+func saveBytesToDisk(data []byte, savePath string) error {
 	dir := filepath.Dir(savePath)
-	err = os.MkdirAll(dir, os.ModePerm)
+	err := os.MkdirAll(dir, os.ModePerm)
 	if err != nil {
 		logrus.Errorf("mkdir error: %v", err)
 		return err
 	}
 
-	dst, err := os.Create(tempPath)
+	dst, err := os.Create(savePath)
 	if err != nil {
-		logrus.Errorf("create temp file error: %v", err)
+		logrus.Errorf("create file error: %v", err)
 		return err
 	}
 	defer dst.Close()
 
-	_, err = io.Copy(dst, src)
+	_, err = dst.Write(data)
 	if err != nil {
-		logrus.Errorf("copy error: %v", err)
+		logrus.Errorf("write error: %v", err)
 		return err
-	}
-
-	err = trimVideo(tempPath, savePath)
-	if err != nil {
-		logrus.Errorf("ffmpeg trim error: %v", err)
-		return err
-	}
-
-	err = os.Remove(tempPath)
-	if err != nil {
-		logrus.Warnf("error remove trim file: %v", err)
 	}
 
 	return nil
-}
-func trimVideo(inputPath, outputPath string) error {
-	cmd := exec.Command("ffmpeg", "-i", inputPath, "-t", "300", "-c", "copy", outputPath)
-	cmd.Stderr = os.Stderr
-	cmd.Stdout = os.Stdout
-
-	return cmd.Run()
 }
 
 func deleteParentDir(filePath string) error {
@@ -116,7 +87,7 @@ func deleteParentDir(filePath string) error {
 
 func saveFileDiskAndDB(files []*multipart.FileHeader, skippedFiles *[]string, isStreams bool, id int) error {
 	var wg sync.WaitGroup
-	errChan := make(chan error, len(files)*2)
+	errChan := make(chan error, len(files))
 
 	for _, file := range files {
 		savePath := *pathToSave + hashFilename(id, file.Filename) + "/" + file.Filename
@@ -126,21 +97,37 @@ func saveFileDiskAndDB(files []*multipart.FileHeader, skippedFiles *[]string, is
 			continue
 		}
 
-		wg.Add(1)
-		go func(file *multipart.FileHeader, path string) {
-			defer wg.Done()
-			if err := saveFileImmediately(file, path); err != nil {
-				errChan <- fmt.Errorf("ошибка при сохранении файла %s: %w", file.Filename, err)
-			}
-		}(file, savePath)
+		src, err := file.Open()
+		if err != nil {
+			logrus.Errorf("failed to open file %s: %v", file.Filename, err)
+			continue
+		}
+		defer src.Close()
+
+		fileBytes, err := io.ReadAll(src)
+		if err != nil {
+			logrus.Errorf("failed to read file %s: %v", file.Filename, err)
+			continue
+		}
+
+		filesId, err := mysql.GetConnection().SetFilesData(file.Filename, savePath, isStreams, id)
+		if err != nil {
+			logrus.Errorf("SetFilesData failed for %s: %v", file.Filename, err)
+			continue
+		}
 
 		wg.Add(1)
-		go func(file *multipart.FileHeader, path string) {
+		go func(path string, data []byte, filesId int, filename string) {
 			defer wg.Done()
-			if err := mysql.GetConnection().SetFilesData(file, path, isStreams, id); err != nil {
-				errChan <- fmt.Errorf("ошибка при записи в БД файла %s: %w", file.Filename, err)
+			if err := saveBytesToDisk(data, path); err != nil {
+				mysql.GetConnection().SetStatusByFilesID(filesId, models.StatusLoadError)
+				errChan <- fmt.Errorf("error while saving file %s: %w", filename, err)
+				return
 			}
-		}(file, savePath)
+
+			mysql.GetConnection().SetStatusByFilesID(filesId, models.StatusNoConv)
+			logrus.Infof("file %s saved successfully", filename)
+		}(savePath, fileBytes, filesId, file.Filename)
 	}
 
 	wg.Wait()
@@ -159,6 +146,6 @@ func saveFileDiskAndDB(files []*multipart.FileHeader, skippedFiles *[]string, is
 
 func hashFilename(userID int, filename string) string {
 	hasher := md5.New()
-	hasher.Write([]byte(fmt.Sprintf("%d_%s", userID, filename))) // Добавляем userID к имени файла
+	hasher.Write([]byte(fmt.Sprintf("%d_%s", userID, filename)))
 	return hex.EncodeToString(hasher.Sum(nil))
 }

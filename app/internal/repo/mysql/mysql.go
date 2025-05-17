@@ -11,7 +11,6 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sirupsen/logrus"
 	"log"
-	"mime/multipart"
 	"sync"
 )
 
@@ -45,22 +44,41 @@ func GetConnection() *Storage {
 	return storage
 }
 
-func (s *Storage) SetFilesData(file *multipart.FileHeader, path string, isStream bool, id int) error {
+func (s *Storage) SetFilesData(filename, path string, isStream bool, userId int) (int, error) {
 	query := `
 		INSERT INTO files (filename, filepath, is_stream, status, user_id)
-		VALUES (?, ?, ?, IF(? = 1, 'conv', 'no_conv'), ?)
+		VALUES (?, ?, ?, 'loading', ?)
 	`
-	_, err := s.db.Exec(query, file.Filename, path, isStream, isStream, id)
+	result, err := s.db.Exec(query, filename, path, isStream, userId)
 	if err != nil {
 		if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1062 {
 			logrus.Errorf("duplicate entry error: %v", err)
-			return err
+			return 0, err
 		} else {
 			logrus.Errorf("failed to insert file data: %v", err)
-			return err
+			return 0, err
 		}
 	}
-	return nil
+
+	id, err := result.LastInsertId()
+	if err != nil {
+		logrus.Errorf("failed to get last insert ID: %v", err)
+		return 0, err
+	}
+	return int(id), nil
+}
+
+func (s *Storage) SetStatusByFilesID(filesID int, status models.FileStatus) {
+	query := `
+		UPDATE files 
+		SET status = ? 
+		WHERE id = ?
+	`
+
+	_, err := s.db.Exec(query, status, filesID)
+	if err != nil {
+		logrus.Errorf("failed to update status: %s", err)
+	}
 }
 
 func (s *Storage) SetStatusIntoConv(id int) error {
